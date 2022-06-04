@@ -383,16 +383,14 @@ class BaseBenchmarkRunner(object, metaclass=abc.ABCMeta):
             dataset, bypass_data_to_eval = self.get_dataset_batches()
 
             if self._args.use_synthetic_data:
-                old_ds = dataset
                 try:
-                    dataset = SyntheticDataset(old_ds, device="/gpu:0")
+                    dataset = SyntheticDataset(dataset, device="/gpu:0")
                     self._debug_print(
                         "Model dataset has been replaced by a synthetic data "
                         "loader to minimize data loading jitter."
                     )
 
                 except Exception as e:
-                    dataset = old_ds
                     print(
                         f"[ERROR] Impossible to transform the dataset into a "
                         f"synthetic dataset. Performance numbers will be "
@@ -450,7 +448,11 @@ class BaseBenchmarkRunner(object, metaclass=abc.ABCMeta):
             step_idx = 0
             ds_iter = iter(dataset)
 
-            dequeue_batch_fn = get_dequeue_batch_fn(ds_iter)
+            dequeue_batch_fn = get_dequeue_batch_fn(
+              ds_iter,
+              use_xla=self._args.use_xla
+            )
+            
             force_data_on_gpu_fn = get_force_data_on_gpu_fn(
                 device="/gpu:0",
                 use_xla=self._args.use_xla

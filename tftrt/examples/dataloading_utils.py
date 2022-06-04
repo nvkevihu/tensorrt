@@ -39,10 +39,15 @@ class SyntheticDataset(object):
 def ensure_dataset_on_gpu(dataset, device):
     try:
         ds_device = dataset._variant_tensor_attr.device.lower()
-    except AttributeError:
+    except AttributeError as e:
+        print(
+            f"[ERROR] Impossible to find the device from the dataset.\n"
+            f"Error: {e}."
+        )
         return dataset
 
     if device.lower() not in ds_device:
+        print(f"[INFO] Adding prefetch to device `{device}` to the dataset.")
         return dataset.apply(
             tf.data.experimental.prefetch_to_device(
                 device=device,
@@ -54,9 +59,10 @@ def ensure_dataset_on_gpu(dataset, device):
         return dataset
 
 
-def get_dequeue_batch_fn(ds_iter):
+def get_dequeue_batch_fn(ds_iter, use_xla=False):
 
     @force_gpu_resync
+    @tf.function(jit_compile=use_xla)
     def dequeue_batch_fn():
         """This function should not use tf.function().
         It would create two unwanted effects:
