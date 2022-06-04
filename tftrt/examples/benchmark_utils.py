@@ -13,14 +13,25 @@ __all__ = ["DataAggregator", "force_gpu_resync", "print_dict", "timed_section"]
 
 
 def force_gpu_resync(func):
-    p = tf.constant(0.)  # Create small tensor to force GPU resync
+    try:
+        sync_device_fn = tf.experimental.sync_devices
 
-    def wrapper(*args, **kwargs):
-        rslt = func(*args, **kwargs)
-        (p + 1.).numpy()  # Sync the GPU
-        return rslt
+        def wrapper(*args, **kwargs):
+            rslt = func(*args, **kwargs)
+            sync_device_fn()
+            return rslt
 
-    return wrapper
+        return wrapper
+
+    except AttributeError:
+        p = tf.constant(0.)  # Create small tensor to force GPU resync
+
+        def wrapper(*args, **kwargs):
+            rslt = func(*args, **kwargs)
+            (p + 1.).numpy()  # Sync the GPU
+            return rslt
+
+        return wrapper
 
 
 def print_dict(input_dict, prefix='  ', postfix='', redirect_to_str=False):
