@@ -1,4 +1,5 @@
 #include <chrono>
+#include <fstream>
 #include <iostream>
 #include <numeric>
 #include <vector>
@@ -145,6 +146,7 @@ int main(int argc, char* argv[]) {
   int32_t eval_iters = 1000;
   bool input_from_device = true;
   bool output_to_host = true;
+  string out_path = "";
   std::vector<Flag> flag_list = {
       Flag("model_path", &model_path, "graph to be executed"),
       Flag("signature_key", &signature_key, "the serving signature to use"),
@@ -153,6 +155,7 @@ int main(int argc, char* argv[]) {
       Flag("eval_iters", &eval_iters, "number of timed iterations to run"),
       Flag("input_from_device", &input_from_device, "use inputs from device, rather than host"),
       Flag("output_to_host", &output_to_host, "copy outputs to host after inference"),
+      Flag("out_path", &out_path, "if set, writes raw times to CSV at this location"),
   };
   string usage = tensorflow::Flags::Usage(argv[0], flag_list);
   const bool parse_result = tensorflow::Flags::Parse(&argc, argv, flag_list);
@@ -231,6 +234,15 @@ int main(int argc, char* argv[]) {
   // Note: Throughput using GPU inference time, rather than wall time
   LOG(INFO) << "Throughput (samples/s): " << 1e3 * eval_iters * batch_size / total_compute_time;
   LOG(INFO) << "Engine build time + first inference latency (ms): " << infer_time.front();
+
+  // Save raw results to file
+  if (!out_path.empty() && !infer_time.empty()) {
+    std::ofstream outfile;
+    outfile.open(out_path);
+    std::copy(infer_time.begin(), infer_time.end() - 1, std::ostream_iterator<std::string>(outfile, ", "));
+    outfile << infer_time.back();
+    outfile.close();
+  }
 
   return 0;
 }
