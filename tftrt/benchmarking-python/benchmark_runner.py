@@ -12,6 +12,9 @@ import json
 import logging
 import sys
 import time
+import os
+import signal
+from subprocess import Popen, PIPE
 
 from distutils.util import strtobool
 
@@ -499,6 +502,10 @@ class BaseBenchmarkRunner(object, metaclass=abc.ABCMeta):
 
                 if step_idx == self._args.num_warmup_iterations - 5:
                     start_profiling()
+                    cmd = "bash /workspace/trt-tot/log_gpu_info.sh " + self._args.gpu_log_path
+                    with Popen(cmd.split(), stdout=PIPE) as proc:
+                        pid = int(proc.stdout.readline())
+                        print("PID:", pid)
 
                 if (
                     self._args.num_iterations is not None and
@@ -545,6 +552,8 @@ class BaseBenchmarkRunner(object, metaclass=abc.ABCMeta):
 
                 if not self._args.use_synthetic_data:
                     data_aggregator.aggregate_data(y_pred, y)
+
+            os.kill(pid, signal.SIGKILL)
 
             if (
                 not self._args.debug_performance and

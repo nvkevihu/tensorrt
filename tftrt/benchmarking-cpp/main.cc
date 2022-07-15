@@ -2,6 +2,10 @@
 #include <iostream>
 #include <numeric>
 #include <vector>
+#include <unistd.h>
+#include <signal.h>
+#include <thread>
+#include <chrono>
 
 #include "tensorflow/cc/ops/array_ops.h"
 #include "tensorflow/cc/ops/const_op.h"
@@ -24,6 +28,8 @@ using tensorflow::Flag;
 using tensorflow::Status;
 using tensorflow::string;
 using tensorflow::Tensor;
+
+#define MAX_LEN 256
 
 #define TFTRT_ENSURE_OK(x)                                                 \
   do {                                                                     \
@@ -172,6 +178,7 @@ int main(int argc, char* argv[]) {
   bool input_from_device = true;
   bool output_to_host = true;
   string out_dir = "";
+  string log_file = "";
   std::vector<Flag> flag_list = {
       Flag("model_path", &model_path, "graph to be executed"),
       Flag("signature_key", &signature_key, "the serving signature to use"),
@@ -181,6 +188,7 @@ int main(int argc, char* argv[]) {
       Flag("input_from_device", &input_from_device, "use inputs from device, rather than host"),
       Flag("output_to_host", &output_to_host, "copy outputs to host after inference"),
       Flag("out_dir", &out_dir, "if set, runs the profiler and exports to this directory"),
+      Flag("log_file", &log_file, "path to log GPU information during inference"),
   };
   string usage = tensorflow::Flags::Usage(argv[0], flag_list);
   const bool parse_result = tensorflow::Flags::Parse(&argc, argv, flag_list);
@@ -228,12 +236,24 @@ int main(int argc, char* argv[]) {
   std::chrono::steady_clock::time_point start_time;
   std::chrono::steady_clock::time_point end_time;
   std::unique_ptr<tensorflow::ProfilerSession> profiler;
+  int pid;
   for (int i = 0; i < warmup_iters + eval_iters; i++) {
     if (i == warmup_iters) {
       LOG(INFO) << "Warmup done";
       if (!out_dir.empty()) {
         StartProfiling(profiler);
       }
+      string cmd = "bash /workspace/trt-tot/log_gpu_info.sh " + log_file;
+      FILE *fp = popen(cmd.c_str(), "r");
+      char buf[MAX_LEN];
+      if (!fgets(buf, MAX_LEN, fp)) {
+        pclose(fp);
+	LOG(ERROR) << "Failed to get PID of log_gpu_info.sh";
+        return -1;
+      }
+      pclose(fp);
+      pid = atoi(buf);
+      LOG(INFO) << "PID: " << pid;
       eval_start_time = std::chrono::steady_clock::now();
     }
 
@@ -257,7 +277,10 @@ int main(int argc, char* argv[]) {
 
     double duration = (end_time - start_time).count() / 1e6;
     infer_time.push_back(duration);
+
+    // std::this_thread::sleep_for(std::chrono::milliseconds(5));
   }
+  kill(pid, SIGKILL);
   if (!out_dir.empty()) {
     StopProfiling(profiler, out_dir);
   }

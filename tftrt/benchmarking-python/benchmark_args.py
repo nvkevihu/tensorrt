@@ -265,6 +265,13 @@ class BaseCommandLineAPI(object):
         )
 
         self._parser.add_argument(
+            "--gpu_log_path",
+            type=str,
+            default=None,
+            help="If set, the location to log GPU info during inference."
+        )
+
+        self._parser.add_argument(
             "--tf_profile_export_path",
             type=str,
             default=None,
